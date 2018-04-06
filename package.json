@@ -1,0 +1,35 @@
+{
+  "name": "plyr-google-analytics",
+  "version": "1.0.0",
+  "description": "Plug-and-play Google Analytics plyr tracking.",
+  "main": "Gruntfile.js",
+  "scripts": {
+    "test": "npm run lint && npx karma start karma.conf.js  --singleRun",
+    "lint": "npx eslint ./src"
+  },
+  "author": "LunaMetrics, LLC",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LunaMetrics/plyr-google-analytics.git"
+  },
+  "devDependencies": {
+    "grunt": "^0.4.5",
+    "grunt-contrib-jshint": "~0.12.0",
+    "grunt-contrib-uglify": "^0.9.1",
+    "jasmine-core": "^2.8.0",
+    "js-beautify": "^1.7.5",
+    "karma": "^1.7.1",
+    "karma-jasmine": "^1.1.0",
+    "karma-phantomjs-launcher": "^1.0.4",
+    "phantomjs-prebuilt": "^2.1.15",
+    "sinon": "^4.5.0"
+  },
+  "bugs": {
+    "url": "https://github.com/LunaMetrics/plyr-google-analytics/issues"
+  },
+  "dependencies": {
+    "eslint": "^4.19.1",
+    "karma-chrome-launcher": "^2.2.0"
+  }
+}

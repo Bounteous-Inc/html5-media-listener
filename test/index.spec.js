@@ -30,114 +30,82 @@ describe('Html5MediaTracker', function(){
 
 	describe('#Html5MediaTracker', function() {
 
-		var tracker;
-
-		beforeEach(function(done) {
-
-			tracker = window.Html5MediaTracker({targets: 'video,audio'});
-			done();
-
-		});
-
-		it('should target two elements', function() {
-
-			expect(tracker._players.length).toBe(2);
-
-		});
-
-		it('should throw an exception w/ no targets', function(done) {
+		it('should throw an exception w/ no events', function(done) {
 
 			try { 
-				window.html5MediaTracker() 
+				window.Html5MediaListener('video', function() {}); 
 			} catch (err) {
 				done();
 			}
 
 		});
 
-		it('should have a .on() and .destroy() method', function() {
+		it('should have an .on(), .off(), and .destroy() method', function() {
 
-			expect(typeof tracker.on).toBe('function');
-			expect(typeof tracker.destroy).toBe('function');
+      expect(typeof Html5MediaListener.on).toBe('function');
+			expect(typeof Html5MediaListener.off).toBe('function');
+			expect(typeof Html5MediaListener.destroy).toBe('function');
 
 		});
 
 		describe('.destroy()', function() {
 
-			it('should destroy the tracker', function() {
+			it('should destroy the listener', function(done) {
 
 				var player = document.getElementById('video');
+        var evts = [];
 					
+        Html5MediaListener.on({events: ['play']}, evts.push);
+
 				tracker.destroy();
 
-				expect(tracker._handlers).toBeUndefined();
-				expect(tracker._bindings).toBeUndefined();
+        player.play().then(function() {
+
+          setTimeout(function() {
+            expect(evts.length).toBe(0);
+            // @TODO expect(window.Html5MediaListener).toBeUndefined())
+            done();
+          },0);
+
+        });
 	
 			});
 
 		});
 
+    describe('remove()', function() {
+
+      it('should unregister a handler', function() {
+    
+        var evts = [];
+					
+        Html5MediaListener.on({events: ['play']}, evts.push);
+        Html5MediaListener.off({events: ['play']}, evts.push);
+
+        player.play().then(function() {
+
+          setTimeout(function() {
+            expect(evts.length).toBe(0);
+            done();
+          },0);
+
+        });
+
+      });
+
+    });
+
 		describe('.on()', function() {
 
-			it('should add events when `on()` is called with events', function() {
-
-				tracker.on({ events: ['play'] }, function(){});
-			
-				var player = document.getElementById('video');
-				var id = player.__html5PlayerId__;
-				var handlers = tracker._handlers[id];
-		
-				expect(handlers.play).toBeDefined();
-				expect(handlers.play.length).toBe(1);
-
-			});
-
-			it('should add events when `on()` is called with percentages', function() {
-
-				tracker.on({ percentages: { each: [10] } }, function(){});
-			
-				var player = document.getElementById('video');
-				var id = player.__html5PlayerId__;
-				var handlers = tracker._handlers[id];
-	
-				expect(handlers[Math.floor(0.10 * player.duration)]).toBeDefined();
-				expect(handlers[Math.floor(0.10 * player.duration)].length).toBe(1);
-
-			});
-
-			it('should add events when `on()` is called with seconds', function() {
-
-				tracker.on({ seconds: { each: [10] } }, function(){});
-	
-				var player = document.getElementById('video');
-				var id = player.__html5PlayerId__;
-				var handlers = tracker._handlers[id];
-	
-				expect(handlers['10']).toBeDefined();
-				expect(handlers['10'].length).toBe(1);
-
-			});
-
 			describe('handler calls', function() {
-
-				var tracker;
-				var events;
-
-				beforeEach(function(done) {
-			
-					tracker = window.Html5MediaTracker({targets: 'video'});
-					done();
-
-				});
 
 				describe('events', function() {
 
 					it('should see a play event', function(done) {
 
 						var player = document.getElementById('audio'); 
-						var audioTracker = window.Html5MediaTracker({targets: 'audio'});
 
-						audioTracker.on({
+						window.Html5MediaTracker.on('audio', {
 							events: ['play']
 						}, function(evt) {
 
@@ -157,7 +125,7 @@ describe('Html5MediaTracker', function(){
 
 						var player = document.getElementById('video'); 
 
-						tracker.on({
+						window.Html5MediaListener.on({
 							events: ['pause']
 						}, function(evt) {
 
@@ -182,7 +150,7 @@ describe('Html5MediaTracker', function(){
 						var player = document.getElementById('video'); 
 						var evts;							
 
-						tracker.on({
+						window.Html5MediaListener.on({
 							events: ['pause', 'ended']
 						}, function(evt) {
 
@@ -208,7 +176,7 @@ describe('Html5MediaTracker', function(){
 						var player = document.getElementById('video');
 						var evts = [];
 
-						tracker.on({
+						window.Html5MediaListener.on({
 							percentages: {
 								each: [10, 90],
 								every: [25]
@@ -257,19 +225,20 @@ describe('Html5MediaTracker', function(){
 
 						for (i = 1; i < everyCalls; i++) { resultLabels.push(ts(2 * i)); }
 
-						tracker.on({
+						Html5MediaListener.on({
 							seconds: {
 								each: [1],
 								every: [2]
 							}
 						}, function(evt) {
 
-							evts.push(evt);
 							var evtOne;
+
+							evts.push(evt);
 
 							if (evts.length === Math.ceil(player.duration / 2)) {
 
-								var evtOne = evts[0];
+							  evtOne = evts[0];
 
 								expect(evts.map(function(evt) { return evt.label; }).join())
 									.toBe(resultLabels.join());
@@ -299,17 +268,43 @@ describe('Html5MediaTracker', function(){
 
 				describe('two handlers on the same point', function() {
 
+          it('should only register a handler one time per type/handler combo', function(done) {
+
+            var player = document.getElementById('video');
+
+            function callCounter() { 
+              callCounter.called++;
+            }
+            callCounter.called = 0;
+
+            window.Html5MediaListener.on({events: 'play'}, callCounter);
+            window.Html5MediaListener.on({events: ['play', 'pause']}, callCounter);
+
+            player.play().then(function() {
+
+              setTimeout(function() {
+
+                expect(callCounter.called).toBe(1); 
+                player.pause();
+                expect(callCounter.called).toBe(2);
+
+              }, 0);
+
+            });
+            
+          });
+
 					it('should fire both handlers', function(done) {
 
 						var player = document.getElementById('video');
 						var flagOne = false;
 						var flagTwo = false;
 
-						tracker.on({
+						window.Html5MediaListener.on({
 							events: ['play']
 						}, clearFlagOne);
 
-						tracker.on({
+						window.Html5MediaListener.on({
 							events: ['play']
 						}, clearFlagTwo);
 
@@ -328,21 +323,6 @@ describe('Html5MediaTracker', function(){
 
 						function clearFlagOne() { flagOne = true; }						
 						function clearFlagTwo() { flagTwo = true; }						
-
-					});
-
-				});
-
-				describe('illegal percentages', function() {
-
-					it('should ignore illegal percentages', function() {
-
-						var player = document.getElementById('video');
-						var id = player.__html5PlayerId__;
-
-						tracker.on({percentages: { each: [101], every: [105] }}, function(){});
-
-						expect(Object.keys(tracker._handlers[id]).length).toBe(0);
 
 					});
 
@@ -371,7 +351,10 @@ describe('Html5MediaTracker', function(){
 
 					it('should ignore percentages when .duration is Infinity', function() {
 
-						tracker.on({percentages: { each: [101], every: [105] }}, function(){});
+            // @TODO
+            return;
+
+						Html5MediaListener.on({percentages: { each: [101], every: [105] }}, function(){});
 
 						expect(Object.keys(tracker._handlers['99']).length).toBe(0);
 

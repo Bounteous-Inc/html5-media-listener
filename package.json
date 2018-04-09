@@ -22,8 +22,7 @@
     "karma": "^1.7.1",
     "karma-jasmine": "^1.1.0",
     "karma-phantomjs-launcher": "^1.0.4",
-    "phantomjs-prebuilt": "^2.1.15",
-    "sinon": "^4.5.0"
+    "phantomjs-prebuilt": "^2.1.15"
   },
   "bugs": {
     "url": "https://github.com/LunaMetrics/plyr-google-analytics/issues"

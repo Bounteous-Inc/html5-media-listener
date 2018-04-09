@@ -4,9 +4,73 @@
 	// Won't work on LTE IE8, so we install a mock.
 	if (window.navigator.userAgent.match(/MSIE [678]/gi)) return installMock();
 
-	var trackerRegistry = {};
-	var playerIds = 1;
-	var bound = {};
+  var selectorRegistry = {};
+  var handlerRegistry = {};
+  var handlerIds = 1;
+  var idProp = '__html5MediaListenerHandlerId__';
+
+  window.Html5MediaTracker = {
+    on: on,
+    off: off,
+    destroy: destroy,
+    _generateId: _generateId
+  };
+
+  function on(selector, eventsObj, handler) {
+
+    if (typeof selector === 'object' && typeof eventsObj === 'function') {
+
+      handler = eventsObj;
+      eventsObj = selector;
+      selector = 'document';
+
+    }
+
+    var id = _generateId(selector, handler);
+    var listeningPoints = eventsObj.events.concat(eventsObj
+
+
+  }
+
+  function _eventHandler(evt) {
+
+    var type = evt.type;
+    var player = evt.target;
+    var key;
+  
+    for (key in handlerRegistry) {
+
+      // @FIXME
+      if (player.matches(key)) {
+
+        handlerRegistry[key][type].forEach(function(handler) {
+
+          handler({
+            player: player,
+            label: type,
+            seconds: Math.floor(player.currentTime / player.duration)
+          });
+
+        }); 
+
+      }
+
+    }
+
+  }
+
+  function _timingHandler(evt) {
+
+    var player = evt.target;
+    var percentage = Math.c
+
+  }
+
+  function _generateId(selector, handler) {
+
+    
+
+  }
 
 	/**
 	 * @param {Object} opts

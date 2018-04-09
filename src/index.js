@@ -27,12 +27,29 @@
     }
 
     var id = _generateId(selector, handler);
-    var listeningPoints = eventsObj.events.concat(eventsObj
 
+		if (eventsObj.events) { bindEvents(selector, eventsObj.events, handler); }
+		if (eventsObj.percentages) { bindPercentages(selector, eventsObj.percentages, handler); }
+		if (eventsObj.seconds) { bindSeconds(selector, eventsObj.seconds, handler); }
 
   }
 
-  function _eventHandler(evt) {
+	function bindEvents(selector, events, handler) {
+
+				
+
+	}
+
+	function bindPercentages(selector, eventsObj, handler) {
+
+	}
+
+	function bindSeconds(selector, eventsObj, handler) {
+
+
+	} 
+
+  function _eventDispatcher(evt) {
 
     var type = evt.type;
     var player = evt.target;
@@ -59,18 +76,63 @@
 
   }
 
-  function _timingHandler(evt) {
+  function _timingDispatcher(evt) {
 
     var player = evt.target;
-    var percentage = Math.c
+    var percentage = Math.ceil(player.currentTime / player.duration);
+		var seconds = Math.ceil(
+		
+		for (key in handlerRegistry) {
+
+			// @FIXME for document
+			if (player.matches(key)) {
+
+				handlerRegistry[key][percentage].forEach(function(handlerConfig) {
+
+					var handler = handlerConfig.handler;
+					var cache = handlerConfig.cache;
+
+
+	
+				});
+
+			}
+
+		}
 
   }
+/*
+		var player = evt.target;
+		var seconds = Math.ceil(player.currentTime);
+		var playerId = player.__html5PlayerId__;
+		var handlers = this._handlers[playerId];
+		var toCall = [];
+		var key;
+		var i;
+
+		for (key in handlers) {
+
+			if (Number(key) <= seconds) { 
+
+				toCall = toCall.concat(handlers[key]); 
+				delete handlers[key];
+
+			}
+
+		}
+
+		for (i = 0; i < toCall.length; i++) {
+
+			setTimeout(toCall[i], 0);
+
+		}
 
   function _generateId(selector, handler) {
 
     
 
   }
+*/
 
 	/**
 	 * @param {Object} opts

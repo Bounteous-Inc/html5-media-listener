@@ -4,200 +4,492 @@
 	// Won't work on LTE IE8, so we install a mock.
 	if (window.navigator.userAgent.match(/MSIE [678]/gi)) return installMock();
 
-	var trackerRegistry = {};
-	var playerIds = 1;
+	/**
+	 * @typedef SelectorRegistryEntry
+	 *
+	 * @prop {<Integer, PlayerCache>} cache
+   * @prop {<String, Function[]>} handlers 
+ 	 */
+	var selectorRegistry = {};
+	var handlerIds = 1;
+	var idProp = '__html5MediaListenerHandlerId__';
+	var handlerCaches = {};
 	var bound = {};
 
-	/**
-	 * @param {Object} opts
-	 * @param {HTMLNodeCollection|String} opts.targets
-	 */
-	function Html5MediaTracker(opts) {
+	function on(selectorRegistryEntry, eventsObj, handler) {
 
-		if (!(this instanceof Html5MediaTracker)) { return new Html5MediaTracker(opts); }
+		if (!handler[idProp]) { 
 
-		if (!opts.targets) { 
-			throw new TypeError('Missing required configuration opts.targets'); 
+			handler[idProp] = handlerIds; 
+			handlerCaches[handlerIds] = {}; 
+			handlerIds++;
+
 		}
 
-		var self = this;
+		if (eventsObj.events) { 
 
-		self._players = selectAll(opts.targets);
+			bindEvents(selectorRegistryEntry, eventsObj.events, handler); 
 
-		if (!self._players.length) { return; }
+		}
 
-		self._players.forEach(function(el) { 
+		if (eventsObj.percentages) { 
 
-			if (!el.__html5PlayerId__) { el.__html5PlayerId__ = playerIds++; }
+			bindPercentages(selectorRegistryEntry, eventsObj.percentages, handler); 
 
-			var id = el.__html5PlayerId__;
+		}
 
-			(trackerRegistry[id] = trackerRegistry[id] || []).push(self);
-					
-		});
+		if (eventsObj.seconds) { 
+		
+			bindSeconds(selectorRegistryEntry, eventsObj.seconds, handler); 
 
-		self._handlers = {};
-		self._bindings = [];
+		}
 
 	}
 
-	/** 
-	 * @param {Object} config
-	 * @param {String[]} [config.events]
-	 * @param {Object} [config.percentages]
-	 * @param {Number[]} [config.percentages.each]
-	 * @param {Number[]} [config.percentages.every]
-	 * @param {Object} [config.seconds]
-	 * @param {Number[]} [config.seconds.each]
-	 * @param {Number[]} [config.seconds.every]
-	 * @param {Function} handler
-	 * @param {HTMLElement[]} [players]
-	 */
-	Html5MediaTracker.prototype.on = function on(config, handler) {
+	function preflightSelectorMethod(method, makeSelector) {
 
-		if (typeof handler !== 'function') {
+		return function _preflightSelector(selector, eventsObj, handler) {
 
-			throw new TypeError('Handler is not a function');
+			if (typeof selector === 'object' && typeof eventsObj === 'function') {
+
+				handler = eventsObj;
+				eventsObj = selector;
+				selector = '*';
+
+			}
+
+			if (selector.slice(-1) !== '*') { selector += ',' + selector + ' *'; }
+
+			if (makeSelector) {
+
+				selectorRegistry[selector] = selectorRegistry[selector] || {
+					percentage: {},
+					seconds: {},
+					events: {}
+				};
+
+			}
+
+			var selectorRegistryEntry = selectorRegistry[selector];
+
+			if (!selectorRegistryEntry) { return; }
+
+			method(selectorRegistryEntry, eventsObj, handler);
+
+		};
+
+	}
+
+
+	function off(selectorRegistryEntry, eventsObj, handler) {
+
+		if (eventsObj.events) { removeEvents(selectorRegistryEntry, eventsObj.events, handler); }
+		if (eventsObj.percentages) { removePercentages(selectorRegistryEntry, eventsObj.percentages, handler); }
+		if (eventsObj.seconds) { removeSeconds(selectorRegistryEntry, eventsObj.seconds, handler); }
+
+		bound = {};
+
+	}
+
+	function removeEvents(selectorRegistryEntry, events, handler) {
+
+		var handlers = selectorRegistryEntry.events;
+		var handlerInd;
+		var type;
+		var i;
+
+		for (i = 0; i < events.length; i++) {
+			
+			type = events[i];
+			handlerInd = handlers[type] ? handlers[type].indexOf(handler) : -1;
+
+			if (handlerInd > -1) { handlers[type].splice(handlerInd, 1); }
 
 		}
 
-		/**
-  	 * @name StandardConfig
-		 *
-		 * @prop {String[]} events
-		 * @prop {Object} percentages
-		 * @prop {Number[]} percentages.each
-		 * @prop {Number[]} percentages.every
-		 * @prop {Object} seconds
-		 * @prop {Number[]} seconds.each
-		 * @prop {Number[]} seconds.every
-		 */
-		var standardConfig = {
-			events: config.events || [],
-			percentages: {},
-			seconds: {}
-		};
+	}
 
-		['percentages', 'seconds'].forEach(function(type) {
+	function removePercentages(selectorRegistryEntry, percentageObj, handler) {
 
-			['each', 'every'].forEach(function(prop) {
+		var handlers = selectorRegistryEntry.percentages;
+		var handlerInd;
+		var percentage;
+		var i;
 
-				standardConfig[type][prop] = (config[type] || {})[prop] || [];
+		var percentages = (percentageObj.each || [])
+			.concat(_calcEveryPercentage(percentageObj.every || []));
 
-			});
+		for (i = 0; i < percentages.length; i++) {
+			
+			percentage = percentages[i];
+			handlerInd = handlers[percentage] ? handlers[percentage].indexOf(handler) : -1;
+
+			if (handlerInd > -1) { handlers[percentage].splice(handlerInd, 1); }
+
+		}
+
+	}
+
+	function removeSeconds(selectorRegistryEntry, secondsObj, handler) {
+
+		var handlers = selectorRegistryEntry.seconds;
+		var handlerInd;
+		var seconds;
+		var i;
+
+		for (i = 0; i < secondsObj.each.length; i++) {
+
+			seconds = secondsObj.each[i];
+			handlerInd = handlers[seconds] ? handlers[seconds].indexOf(handler) : -1;
+
+			if (handlerInd > -1) { handlers[seconds].splice(handlerInd, 1); }
+
+		}	
+
+		for (i = 0; i < secondsObj.every.length; i++) {
+
+			seconds = secondsObj.every[i];
+			handlerInd = handlers[seconds] ? handlers[seconds].indexOf(handler) : -1;
+
+			if (handlerInd > -1) { handlers[seconds].splice(handlerInd, 1); }
+
+		}	
+
+	}
+
+	function bindEvents(selectorRegistryEntry, events, handler) {
+
+		events.forEach(function(type) {
+
+			var boundHandler;
+
+			if (!bound[type]) {
+
+				boundHandler = _preflightEvent(_eventDispatcher);
+				document.addEventListener(type, boundHandler, true);
+				bound[type] = boundHandler;
+
+			}
+
+		});
+		var eventsHandlers = selectorRegistryEntry.events;
+		var type;
+		var i;
+
+		for (i = 0; i < events.length; i++) {
+
+			type = events[i];
+			eventsHandlers[type] = eventsHandlers[type] || [];
+
+			if (eventsHandlers[type].indexOf(handler) === -1) {
+
+				eventsHandlers[type].push(handler);
+
+			}
+
+		}
+
+	}
+
+	function _calcEveryPercentage(every) {
+
+		var output = {};
+		var n;
+		var i;
+		var l;
+
+		for (i = 0; i < every.length; i++) {
+
+			n = 100.0 / every[i];
+
+			for (l = 1; l <= n; l++) { output[every[i] * l] = true; } 
+
+		}
+
+		return Object.keys(output).map(Number).sort(function(a, b) {
+
+			if (a > b) { return 1; }
+			if (b > a) { return -1; }
+			return 0;
 
 		});
 
-		bindGlobalListeners(standardConfig);
+	}	
 
-		var self = this;
-
-		self._players.forEach(function(player) {
-
-			self._registerHandlers(player, standardConfig, handler);
-
-		});
-
-		self._bindings.push({config: standardConfig, handler: handler});
-
-	};
-
-	Html5MediaTracker.prototype.destroy = function() {
-
-		this.destroy = true;
-		var otherTrackers = false;
-		var key,
-			i;
-
-		for (key in trackerRegistry) {
-
-			for (i = trackerRegistry[key].length - 1; i >= 0; i--) {
-
-				if (trackerRegistry[key][i].destroy) { 
-
-					trackerRegistry[key].splice(i, 1); 
+	function bindPercentages(selectorRegistryEntry, percentageObj, handler) {
 	
-				} else {
+		var boundHandler;
 
-					otherTrackers = true;
+		if (!bound._timeupdate) {
+
+			boundHandler = _preflightEvent(_timingDispatcher);
+			document.addEventListener('timeupdate', boundHandler, true);	
+			bound._timeupdate = boundHandler;
+
+		}
+
+		var percentages = (percentageObj.each || [])
+			.concat(_calcEveryPercentage(percentageObj.every || []));
+		var handlers = selectorRegistryEntry.percentage;
+		var percentage;
+		var i;
+
+		for (i = 0; i < percentages.length; i++) {
+
+			percentage = percentages[i];
+			handlers[percentage] = handlers[percentage] || [];
+			
+			if (handlers[percentage].indexOf(handler) === -1) {
+
+				handlers[percentage].push(handler);
+
+			}
+
+		}
+
+	}
+
+	function bindSeconds(selectorRegistryEntry, secondsObj, handler) {
+
+		if (!bound._timeupdate) {
+
+			document.addEventListener('timeupdate', _preflightEvent(_timingDispatcher), true);	
+			bound._timeupdate = true;
+
+		}
+
+		var handlers = selectorRegistryEntry.seconds;
+		var initialHandler;
+		var handlerInd;
+		var seconds;
+		var i;
+		var k;
+
+		for (i = 0; i < secondsObj.each.length; i++) {
+
+			seconds = secondsObj.each[i];
+			handlers[seconds] = handlers[seconds] || [];
+			handlerInd = handlers[seconds].indexOf(handler);
+	
+			if (handlerInd === -1) { handlers[seconds].push(handler);	}
+
+		}
+
+		for (i = 0; i < secondsObj.every.length; i++) {
+
+			seconds = secondsObj.every[i];
+			handlers[seconds] = handlers[seconds] || [];
+
+			initialHandler = rebindingHandler(seconds, seconds, handlers, handler);
+
+			initialHandler.original = handler;
+			
+			for (k = 0; k < handlers[seconds].length; k++) {
+
+				if (handlers[seconds][k].original === handler) { handlerInd = k; break; }
+
+			}
+
+			if (handlerInd === -1) { handlers[seconds].push(initialHandler); }
+
+		}
+
+	} 
+
+	function rebindingHandler(seconds, step, handlers, handler) {
+
+		return function _rebindingHandler(evt) {
+
+			var player = evt.player;
+			var toCall = [seconds];
+			var curr = player.currentTime;
+			var missedIntervals;
+			var next;
+			var i;
+			
+			if (curr > seconds + step) {
+
+				missedIntervals = Math.floor((curr - seconds) / seconds);
+				
+				for (i = 1; i < missedIntervals + 1; i++) {
+
+					toCall.push(i * step + seconds);
 
 				}
 
 			}
 
-		} 
+			toCall.forEach(function(interval) {
+				
+				nextTick(function() { 
 
-		if (!otherTrackers) { unbindGlobalListeners(); }
+					handler.call(player, {
+						player: player,
+						label: _translateSeconds(interval),
+						seconds: interval
+					});
 
-		delete this._handlers;
-		delete this._bindings;
-	
-		return;
+				});
 
-	};
+			});
 
-	/**
-   * @param {Event} evt
-	 */
-	Html5MediaTracker.prototype.handleEvent = function(evt) {
+			if (!player.ended) {
 
-		var type = evt.type;
+				next = (missedIntervals + 1) * step + seconds; 
+				handlers[next] = rebindingHandler(next, step, handlers);
+
+			}
+
+		};
+
+	}
+
+
+	function _preflightEvent(handler) {
+
+		return function _preflightEvent(evt) {
+
+			if (!evt.isTrusted) { return; }
+
+			handler.call(evt.target, evt);
+
+		};
+
+	}
+
+	function _eventDispatcher(evt) {
+
 		var player = evt.target;
-		var playerId = player.__html5PlayerId__;
+		var type = evt.type;
+		var seconds = Math.ceil(player.currentTime);
+		var selector;
+		var handlers;
 
-		if (!this._handlers[playerId] || !this._handlers[playerId][type]) { return; }
-		// Players emit pause events automatically before 'ended', which we squelch
 		if (type === 'pause' && player.ended) { return; }
 
-		var handlers = this._handlers[playerId][type];
-		var i;
+		for (selector in selectorRegistry) {
 
-		for (i = 0; i < handlers.length; i++) {
+			if (player.matches(selector)) {
 
-			setTimeout(handlers[i], 0);
+				handlers = selectorRegistry[selector].events;
 
-		}
+				if (handlers[type] && handlers[type].length) {
 
-	};
+					handlers[type].forEach(function(handler) {
 
-	/**
- 	 * @param {Event} evt
-	 */
-	Html5MediaTracker.prototype.handleTiming = function(evt) {
+						handler({
+							player: player,
+							label: type,
+							seconds: seconds
+						});
 
-		var player = evt.target;
-		var seconds = Math.ceil(player.currentTime);
-		var playerId = player.__html5PlayerId__;
-		var handlers = this._handlers[playerId];
-		var toCall = [];
-		var key;
-		var i;
+					});
 
-		for (key in handlers) {
-
-			if (Number(key) <= seconds) { 
-
-				toCall = toCall.concat(handlers[key]); 
-				delete handlers[key];
+				}			
 
 			}
 
 		}
 
-		for (i = 0; i < toCall.length; i++) {
+	}
 
-			setTimeout(toCall[i], 0);
+	function _timingDispatcher(evt) {
+
+		var player = evt.target;
+		var seconds = Math.ceil(player.currentTime);
+		var percentage = Math.ceil(seconds / player.duration * 100);
+		var selector;
+		var handlers;
+		var key;
+		
+		for (selector in selectorRegistry) {
+
+			if (player.matches(selector)) {
+
+				handlers = selectorRegistry[selector];
+
+				if (handlers.percentage) {
+
+					for (key in handlers.percentage) {
+
+						if (Number(key) <= percentage) {
+
+							handlers.percentage[key].forEach(function(handler) {
+
+								var handlerId = handler[idProp] || handler.original[idProp];
+								var handlerCache = handlerCaches[handlerId];
+
+								if (handlerCache[key]) { return; }
+
+								handler.call(player, {
+									player: player,
+									seconds: Math.ceil(player.duration * key / 100),
+									label: key + '%'
+								});
+
+								handlerCache[key] = true;	
+
+							});
+
+						}
+
+					}
+
+				}
+
+				if (handlers.seconds) {
+
+					for (key in handlers.seconds) {
+
+						if (Number(key) <= seconds) {
+
+							handlers.seconds[key].forEach(function(handler) {
+
+								var handlerId = handler[idProp] || handler.original[idProp];
+								var handlerCache = handlerCaches[handlerId];
+
+								if (handlerCache[key]) { return; }
+
+								handler({
+									player: player,
+									seconds: Number(key),
+									label: _translateSeconds(Number(key))
+								});
+
+								handlerCache[key] = true;	
+
+							});
+
+						}
+
+					}
+
+				}
+
+			}
 
 		}
 
-	};
+	}
 
-	/**
-	 * @param {Number} n
-	 *
-	 * @returns {String}
-	 */
-	Html5MediaTracker._translateSeconds = function(n) {
+	function destroy() {
+
+		var type;
+		var key;
+
+		for (type in bound) {
+
+			document.removeEventListener(type, bound[type],  true);
+
+		}
+
+		document.removeEventListener('timingupdate', bound._timeupdate, true);
+		
+		for (key in selectorRegistry) { delete selectorRegistry[key]; }
+
+	}
+
+	function _translateSeconds(n) {
 
 		var hours = Math.floor(n / 3600);
 		var minutes = Math.floor((n - hours * 3600) / 60);
@@ -209,289 +501,35 @@
 
 		}).join(':');
 
-	};
-
-	/**
-	 * @param {HTMLVideoElement|HTMLAudioElement} player
-	 * @param {StandardConfig} config
-	 * @param {Function} handler
-	 */
-	Html5MediaTracker.prototype._registerHandlers = function(player, config, handler) {
-
-		var self = this;
-		var playerId = player.__html5PlayerId__;
-		var handlers = self._handlers[playerId] = self._handlers[playerId] || {};
-		var percentageConfigs = [];
-
-		config.events.forEach(function(type) {
-
-			handlers[type] = handlers[type] || [];
-			handlers[type].push(function() {
-
-				handler.call(player, {
-					seconds: Math.floor(player.currentTime),
-					label: type,
-					player:player	
-				});
-
-			});
-
-		});
-
-		if (player.duration !== Infinity && !isNaN(player.duration)) {
-
-			percentageConfigs = config.percentages.every
-				.reduce(function(every, val) {
-
-					var n = 100.0 / val;
-					var i;
-
-					for (i = 1; i <= n; i++) { every.push(val * i); }
-
-					return every;				
-
-				}, [])
-				.concat(config.percentages.each)
-				.reduce(function(data, percentage) { 
-
-					var n = Math.floor(player.duration * percentage / 100.0);
-				
-					if (n === 0.0 || data.uniq[n] || percentage > 100.0) { return data; }
-
-					data.uniq[n] = true;
-
-					data.times.push({
-						seconds: Math.min(player.duration, n),
-						label: percentage + '%',
-						player: player
-					});
-		
-					return data;
-
-				}, {uniq: {}, times: []}).times;	
-
-		}
-
-		var secondsEach = config.seconds.each.map(function(seconds) {
-
-			return {
-				seconds: seconds,
-				label: Html5MediaTracker._translateSeconds(seconds),
-				player: player	
-			};
-
-		});	
-	
-		percentageConfigs.concat(secondsEach).forEach(function(config) {
-			
-			handlers[config.seconds] = handlers[config.seconds] || [];
-			handlers[config.seconds].push(handler.bind(player, config));
-		
-		});
-
-		config.seconds.every.forEach(bindRecursiveSeconds);
-
-		function bindRecursiveSeconds(seconds) {
-
-			var next = Math.floor(player.currentTime / seconds) + seconds;
-
-			handlers[next] = handlers[next] || [];
-
-			handlers[next].push(function() {
-
-				var intervalsThatHavePassed = [next];
-				var curr = player.currentTime;
-				var diff = curr - next;
-				var intervals = Math.floor(diff / seconds);
-				var i;
-
-				for (i = 1; i < intervals + 1; i++) { 
-			
-					intervalsThatHavePassed.push(next + i * seconds);
-
-				}
-	
-				intervalsThatHavePassed.forEach(function(interval) {
-
-					setTimeout(function() {
-
-						handler.call(player, {
-							seconds: interval,
-							label: Html5MediaTracker._translateSeconds(interval),
-							player: player
-						});
-
-					}, 0);
-
-				});
-
-				if (next + seconds * intervalsThatHavePassed <= player.duration) {
-
-					setTimeout(function() {
-
-						handlers[next + seconds] = [bindRecursiveSeconds.bind(next + seconds)];
-
-					}, 0);
-		
-				}
-
-			});
-
-		}
-		
-	};
-
-	/**
-	 * @param {StandardConfig} config
-	 */
-	function bindGlobalListeners(config) {
-
-		config.events.forEach(function(type) {
-		
-			if (bound[type]) return;
-
-			bindDispatcher(type, eventDispatcher);
-
-			bound[type] = true;
-
-		});
-
-		var needsTime = ['percentages', 'seconds'].filter(function(type) {
-
-			return config[type].each.length + config[type].every.length;
-
-		}).length;
-
-		if (needsTime && !bound.timeupdate) {
-
-			bindDispatcher('timeupdate', timingDispatcher);
-			bound.timeupdate = true;
-
-		}
-
-	}
-
-	/**
-	 * @param {Event} evt
-	 */
-	function durationChangeHandler(evt) {
-
-		if (!evt.isTrusted) { return; }
-
-		var player = evt.target;
-		var playerId = player.__html5PlayerId__;
-		var trackers = trackerRegistry[playerId];		
-
-		if (!trackers || trackers.length) { return; }
-	
-		trackers.forEach(function(tracker) {
-	
-			delete tracker._handlers[playerId];
-
-			tracker._bindings.forEach(function(binding) {
-
-				tracker._calculateMarks(player, binding.config, binding.handler);
-
-			});
-
-		});
-
-	}
-
-	/**
-	 * @param {String} type
-	 * @param {Function} dispatcher
-	 */
-	function bindDispatcher(type, dispatcher) {
-
-		document.addEventListener(type, function(evt) {
-
-			var player = evt.target;
-			var tagName = player.tagName;
-
-			if (evt.isTrusted && (tagName === 'AUDIO' || tagName === 'VIDEO')) {
-
-				dispatcher(evt);
-
-			}
-
-		}, true);
-
-	}
-
-	/**
-	 * @param {Event} evt
-	 */
-	function eventDispatcher(evt) {
-
-		var player = evt.target;
-		var trackers = trackerRegistry[player.__html5PlayerId__];
-
-		if (trackers) { 
-
-			trackers.forEach(function(tracker) { 
-				tracker.handleEvent.call(tracker, evt); 
-			});
-
-		}
-
-	}
-
-	/**
-	 * @param {Event} evt
-	 */
-	function timingDispatcher(evt) {
-
-		var player = evt.target;
-		var trackers = trackerRegistry[player.__html5PlayerId__];
-
-		if (trackers) { 
-
-			trackers.forEach(function(tracker) { 
-				tracker.handleTiming(evt); 
-			});
-
-		}
-
-	}
-
-	function unbindGlobalListeners() {
-
-		var e;
-	
-		for (e in bound) { document.removeEventListener(e, eventDispatcher, true); }
-
-		document.removeEventListener('timingupdate', timingDispatcher, true);
-
-		document.removeEventListener('durationchange', durationChangeHandler, true);
-
-		bound = {};	
-
-	}
-
-	/** 
-	 * @param {String[]} tags
-	 *
-	 * @return {HTMLElement[]}
-	 */
-	function selectAll(tags) {
-
-		if (!(Array.isArray(tags))) { tags = [tags]; }
-
-		return [].slice.call(document.querySelectorAll(tags.join()));
-
 	}
 
 	function installMock() {
 
-		window.Html5MediaTracker = function() { return {on: noop, destroy: noop}; };
+		window.Html5MediaListener = function() { return {on: noop, destroy: noop, off: noop}; };
+
+	}
+
+	function nextTick(fn) {
+
+		return setTimeout(fn, 0);
 
 	}
 
 	function noop() {}
 
-	window.Html5MediaTracker = Html5MediaTracker;
+	window.Html5MediaListener = function Html5MediaListener() {
 
+		return {
+			on: preflightSelectorMethod(on, true),
+			off: preflightSelectorMethod(off),
+			destroy: destroy,
+			_translateSeconds: _translateSeconds,
+			_calcEveryPercentage: _calcEveryPercentage,
+			bound:bound
+		};
+
+	};
+ 
 })(document, window);
 /*
  * v1.0.0

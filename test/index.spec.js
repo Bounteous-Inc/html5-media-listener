@@ -30,6 +30,12 @@ describe('html5MediaListener', function(){
 
 			html5MediaListener = window.Html5MediaListener();
 
+		});
+
+		afterEach(function() { 
+
+			html5MediaListener.destroy(); 
+			html5MediaListener = null; 
 
 		});
 
@@ -79,8 +85,10 @@ describe('html5MediaListener', function(){
 			var player = document.getElementById('video');
 			var evts = [];
 				
-			html5MediaListener.on({events: ['play']}, function(evt) { evts.push(evt); });
-			html5MediaListener.off({events: ['play']}, function(evt) { evts.push(evt); });
+			function handler(evt) { evts.push(evt); }
+
+			html5MediaListener.on({events: ['play']}, handler);
+			html5MediaListener.off({events: ['play']}, handler);
 
 			player.play().then(function() {
 
@@ -232,7 +240,6 @@ describe('html5MediaListener', function(){
 
 			html5MediaListener.on({events: ['play']}, callCounter);
 			html5MediaListener.on({events: ['play', 'pause']}, callCounter);
-			console.log(html5MediaListener.bound);
 
 			player.play().then(function() {
 
@@ -290,22 +297,44 @@ describe('html5MediaListener', function(){
 
 		});
 
+		it('should fire for both percentage and seconds events', function(done) {
+
+			var evts = [];
+			var player = document.getElementById('video');
+	
+			html5MediaListener.on({
+				percentages: {
+					each: [10]
+				},
+				seconds: {
+					each: [4]
+				}
+			}, function(evt) {
+	
+				evts.push(evt);
+				if(evts.length === 2) { done(); }
+
+			});	
+	
+			player.currentTime = 10;
+
+		});
+
 		it('should see only an ended event', function(done) {
 
-			var player = document.getElementById('video'); 
+			var player = document.getElementById('video');
 
 			html5MediaListener.on({
-				events: ['pause', 'ended']
+				events: ['ended', 'pause']
 			}, function(evt) {
-
+	
 				expect(evt.label).toBe('ended');
-				expect(evt.seconds).toBe(Math.ceil(player.duration));
-
 				done();
 
 			});
 
-			player.currentTime = player.duration - 1;
+			player.currentTime = player.duration - 0.1;
+
 			player.play();
 
 		});

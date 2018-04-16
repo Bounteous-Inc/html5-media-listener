@@ -1,0 +1,34 @@
+{
+  "name": "html5-media-listener",
+  "version": "1.0.0",
+  "description": "Event listening interface for lazily-loaded HTML5 media. Supports percentage/second-based breakpoints.",
+  "main": "Gruntfile.js",
+  "scripts": {
+    "test": "npm run lint && npx karma start karma.conf.js  --singleRun",
+    "lint": "npx eslint ./src"
+  },
+  "author": "LunaMetrics, LLC",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LunaMetrics/html5-media-listener.git"
+  },
+  "devDependencies": {
+    "grunt": "^0.4.5",
+    "grunt-contrib-jshint": "~0.12.0",
+    "grunt-contrib-uglify": "^0.9.1",
+    "jasmine-core": "^2.8.0",
+    "js-beautify": "^1.7.5",
+    "karma": "^1.7.1",
+    "karma-jasmine": "^1.1.0",
+    "karma-phantomjs-launcher": "^1.0.4",
+    "phantomjs-prebuilt": "^2.1.15"
+  },
+  "bugs": {
+    "url": "https://github.com/LunaMetrics/html5-media-listener/issues"
+  },
+  "dependencies": {
+    "eslint": "^4.19.1",
+    "karma-chrome-launcher": "^2.2.0"
+  }
+}
